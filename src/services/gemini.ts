@@ -18,18 +18,27 @@ export interface AnalysisResult {
 }
 
 export class GeminiService {
-  private ai: GoogleGenAI;
+  private ai: GoogleGenAI | null;
 
   constructor() {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is not set");
+    const apiKey =
+      import.meta.env.GEMINI_API_KEY ||
+      import.meta.env.VITE_GEMINI_API_KEY ||
+      "";
+    this.ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+  }
+
+  private getAI(): GoogleGenAI {
+    if (!this.ai) {
+      throw new Error(
+        "GEMINI_API_KEY is not set. Add it to a local .env file and restart Vite."
+      );
     }
-    this.ai = new GoogleGenAI({ apiKey });
+    return this.ai;
   }
 
   async analyzeQuery(query: string, myWebsite: string, competitors: string[]): Promise<AnalysisResult> {
-    const response = await this.ai.models.generateContent({
+    const response = await this.getAI().models.generateContent({
       model: "gemini-3.1-pro-preview",
       contents: query,
       config: {
@@ -69,7 +78,7 @@ export class GeminiService {
     let sentiment: 'Positive' | 'Neutral' | 'Negative' = 'Neutral';
 
     if (isCited) {
-      const sentimentResponse = await this.ai.models.generateContent({
+      const sentimentResponse = await this.getAI().models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Analyze the sentiment of this AI response specifically regarding the website "${myWebsite}". 
         Is the brand described positively, neutrally, or negatively?
@@ -85,7 +94,7 @@ export class GeminiService {
     }
 
     if (!isCited) {
-      const gapResponse = await this.ai.models.generateContent({
+      const gapResponse = await this.getAI().models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Based on this AI response: "${text.substring(0, 500)}...", why was "${myWebsite}" NOT cited? 
         Identify the 'Entity Gap'. What keywords, facts, or technical terms do the cited competitors have that "${myWebsite}" might be missing? 
@@ -107,7 +116,7 @@ export class GeminiService {
   }
 
   async optimizeContent(content: string): Promise<{ answerFirst: string; schema: string }> {
-    const response = await this.ai.models.generateContent({
+    const response = await this.getAI().models.generateContent({
       model: "gemini-3.1-pro-preview",
       contents: `Optimize the following content for AEO (Answer Engine Optimization).
       1. Rewrite the first 100 words into an 'Answer-First' structure (40-60 words) that directly answers a likely user query.
@@ -135,7 +144,7 @@ export class GeminiService {
   }
 
   async discoverTrendingPrompts(niche: string, myWebsite: string): Promise<{ prompt: string; score: number; reasoning: string }[]> {
-    const response = await this.ai.models.generateContent({
+    const response = await this.getAI().models.generateContent({
       model: "gemini-3.1-pro-preview",
       contents: `Identify the top 10 most common and high-intent search queries/prompts that users ask AI engines regarding the "${niche}" space. 
       For each prompt, evaluate its "Citation Potential Score" (0-100) for the website "${myWebsite}". 
@@ -171,7 +180,7 @@ export class GeminiService {
 
   async fetchAndAnalyzeUrl(url: string): Promise<{ content: string; summary: string }> {
     try {
-      const response = await this.ai.models.generateContent({
+      const response = await this.getAI().models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Analyze the content of this URL: ${url}. 
         1. Extract the main text content of the page (cleaned of HTML/boilerplate).
@@ -201,7 +210,7 @@ export class GeminiService {
       console.error("URL Context failed, trying Search Grounding fallback...", e);
       
       // Fallback: Use Google Search to find information about the site if direct fetch fails
-      const fallbackResponse = await this.ai.models.generateContent({
+      const fallbackResponse = await this.getAI().models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Find information about the website or company at ${url}. 
         Summarize what they do and provide a sample of the type of content found on their homepage.
@@ -240,7 +249,7 @@ export class GeminiService {
       sentiment: r.sentiment
     }));
 
-    const response = await this.ai.models.generateContent({
+    const response = await this.getAI().models.generateContent({
       model: "gemini-3.1-pro-preview",
       contents: `You are a world-class GEO (Generative Engine Optimization) and AEO (Answer Engine Optimization) strategist. 
       Analyze the following bulk test results for the website "${myWebsite}":
@@ -273,7 +282,7 @@ export class GeminiService {
   }
 
   async generatePromptRoadmap(prompt: string, myWebsite: string, competitors: string[]): Promise<string> {
-    const response = await this.ai.models.generateContent({
+    const response = await this.getAI().models.generateContent({
       model: "gemini-3.1-pro-preview",
       contents: `Create a highly specific, systematic implementation roadmap to get the website "${myWebsite}" cited by AI engines for the following prompt:
       
@@ -298,7 +307,7 @@ export class GeminiService {
   }
 
   async generateMultichannelStrategy(url: string, content: string): Promise<string> {
-    const response = await this.ai.models.generateContent({
+    const response = await this.getAI().models.generateContent({
       model: "gemini-3.1-pro-preview",
       contents: `Perform a deep structural and multichannel strategy audit for the website: ${url}.
       
